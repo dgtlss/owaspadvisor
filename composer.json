@@ -3,7 +3,7 @@
     "description": "A Laravel package to help developers implement OWASP Top 10 security guidelines",
     "type": "library",
     "license": "MIT",
-    "version": "0.0.6",
+    "version": "1.0.0",
     "authors": [
         {
             "name": "Nathan Langer",
