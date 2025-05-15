@@ -70,20 +70,4 @@ return [
         'notify_on_high_risk' => true,
         'notification_channels' => ['mail'], // Options: mail, slack
     ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Monitoring Settings
-    |--------------------------------------------------------------------------
-    |
-    | Configure real-time security monitoring settings.
-    |
-    */
-    'monitoring' => [
-        'enabled' => true,
-        'log_failed_attempts' => true,
-        'max_failed_attempts' => 5,
-        'lockout_time' => 15, // minutes
-        'notify_on_lockout' => true,
-    ],
 ]; 
