@@ -3,7 +3,7 @@
     "description": "A Laravel package to help developers implement OWASP Top 10 security guidelines",
     "type": "library",
     "license": "MIT",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "authors": [
         {
             "name": "Nathan Langer",
@@ -26,7 +26,8 @@
     },
     "autoload": {
         "psr-4": {
-            "dgtlss\\OWASPAdvisor\\": "src/"
+            "dgtlss\\OWASPAdvisor\\": "src/",
+            "App\\": "app/"
         }
     },
     "autoload-dev": {

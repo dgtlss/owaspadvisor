@@ -6,6 +6,9 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Dgtlss\OWASPAdvisor\OWASPAdvisor;
+use Dgtlss\OWASPAdvisor\Commands\SecurityAuditCommand;
+use Dgtlss\OWASPAdvisor\Commands\OWASPInfoCommand;
 
 class OWASPAdvisorServiceProvider extends ServiceProvider
 {
@@ -36,8 +39,8 @@ class OWASPAdvisorServiceProvider extends ServiceProvider
             ], 'views');
 
             $this->commands([
-                Commands\SecurityAuditCommand::class,
-                Commands\OWASPInfoCommand::class,
+                SecurityAuditCommand::class,
+                OWASPInfoCommand::class,
             ]);
         }
 
