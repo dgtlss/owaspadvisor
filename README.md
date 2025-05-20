@@ -26,7 +26,7 @@ A Laravel package that helps developers ensure their applications follow OWASP T
 You can install the package via composer:
 
 ```bash
-composer require dgtlss/owaspadvisor
+composer require dgtlss/owaspadvisor --dev
 ```
 
 After installation, publish the configuration file:

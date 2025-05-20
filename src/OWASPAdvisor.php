@@ -972,13 +972,15 @@ class OWASPAdvisor
             $appPath = $this->getAppPath();
             if (File::exists($appPath)) {
                 $files = File::allFiles($appPath);
+                // Use word boundaries to avoid false positives like "add(" matching "dd("
                 $debugPatterns = [
-                    'dd\(',
-                    'dump\(',
-                    'var_dump\(',
-                    'print_r\(',
-                    'error_reporting\(E_ALL\)',
-                    'ini_set\([\'"]display_errors[\'"]\s*,\s*[\'"]1[\'"]\)',
+                    '\bdd\s*\(',         // dd()
+                    '\bray\s*\(',        // ray()
+                    '\bdump\s*\(',       // dump()
+                    '\bvar_dump\s*\(',   // var_dump()
+                    '\bprint_r\s*\(',    // print_r()
+                    'error_reporting\s*\(\s*E_ALL\s*\)',
+                    'ini_set\s*\(\s*[\'"]display_errors[\'"]\s*,\s*[\'"]1[\'"]\s*\)',
                 ];
                 
                 $debugIssues = [];
