@@ -21,7 +21,7 @@ class SecurityAuditCommand extends Command
         $this->advisor = $advisor;
     }
 
-    public function handle()
+    public function handle(): void
     {
         $this->info('Starting OWASP Security Audit...');
         $this->newLine();
@@ -55,7 +55,7 @@ class SecurityAuditCommand extends Command
         }
     }
 
-    protected function outputConsole(array $results)
+    protected function outputConsole(array $results): void
     {
         foreach ($results as $category => $data) {
             $this->info(strtoupper($category));
@@ -84,19 +84,19 @@ class SecurityAuditCommand extends Command
         }
     }
 
-    protected function outputJson(array $results)
+    protected function outputJson(array $results): void
     {
         $this->line(json_encode($results, JSON_PRETTY_PRINT));
     }
 
-    protected function outputHtml(array $results)
+    protected function outputHtml(array $results): void
     {
         // Generate HTML report using a blade view
         $html = view('owaspadvisor::report', compact('results'))->render();
         $this->line($html);
     }
 
-    protected function saveReport(array $results)
+    protected function saveReport(array $results): void
     {
         $format = $this->option('format');
         $filename = sprintf(
