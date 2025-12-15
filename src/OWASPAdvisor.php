@@ -46,19 +46,19 @@ class OWASPAdvisor
     }
 
     /**
-     * OWASP Top 10 Categories (2021)
+     * OWASP Top 10 Categories (2025)
      */
     protected const CATEGORIES = [
         'A01' => 'Broken Access Control',
-        'A02' => 'Cryptographic Failures',
-        'A03' => 'Injection',
-        'A04' => 'Insecure Design',
-        'A05' => 'Security Misconfiguration',
-        'A06' => 'Vulnerable and Outdated Components',
-        'A07' => 'Identification and Authentication Failures',
-        'A08' => 'Software and Data Integrity Failures',
-        'A09' => 'Security Logging and Monitoring Failures',
-        'A10' => 'Server-Side Request Forgery'
+        'A02' => 'Security Misconfiguration',
+        'A03' => 'Software Supply Chain Failures',
+        'A04' => 'Cryptographic Failures',
+        'A05' => 'Injection',
+        'A06' => 'Insecure Design',
+        'A07' => 'Authentication Failures',
+        'A08' => 'Software or Data Integrity Failures',
+        'A09' => 'Security Logging and Alerting Failures',
+        'A10' => 'Mishandling of Exceptional Conditions'
     ];
 
     /**
@@ -70,6 +70,41 @@ class OWASPAdvisor
     }
 
     /**
+     * Update the overall status based on check results
+     *
+     * @param array $checks
+     * @return string
+     */
+    protected function determineOverallStatus(array $checks): string
+    {
+        $status = 'success';
+        
+        foreach ($checks as $check) {
+            if ($check['status'] === 'error') {
+                return 'error';
+            } elseif ($check['status'] === 'warning' && $status !== 'error') {
+                $status = 'warning';
+            }
+        }
+
+        return $status;
+    }
+
+    /**
+     * Format the check results
+     *
+     * @param array $checks
+     * @return array
+     */
+    protected function formatResults(array $checks): array
+    {
+        return [
+            'status' => $this->determineOverallStatus($checks),
+            'checks' => $checks
+        ];
+    }
+
+    /**
      * Run security audit checks
      *
      * @return array
@@ -78,11 +113,35 @@ class OWASPAdvisor
     {
         $results = [];
         
+        // A01: Broken Access Control
         $results['access_control'] = $this->checkAccessControl();
-        $results['crypto'] = $this->checkCryptography();
-        $results['injection'] = $this->checkInjectionVulnerabilities();
+        
+        // A02: Security Misconfiguration  
         $results['configuration'] = $this->checkSecurityConfiguration();
+        
+        // A03: Software Supply Chain Failures
+        $results['supply_chain'] = $this->checkSoftwareSupplyChain();
+        
+        // A04: Cryptographic Failures
+        $results['crypto'] = $this->checkCryptography();
+        
+        // A05: Injection
+        $results['injection'] = $this->checkInjectionVulnerabilities();
+        
+        // A06: Insecure Design
+        $results['design'] = $this->checkInsecureDesign();
+        
+        // A07: Authentication Failures
         $results['authentication'] = $this->checkAuthentication();
+        
+        // A08: Software or Data Integrity Failures
+        $results['integrity'] = $this->checkSoftwareDataIntegrity();
+        
+        // A09: Security Logging and Alerting Failures
+        $results['logging'] = $this->checkSecurityLogging();
+        
+        // A10: Mishandling of Exceptional Conditions
+        $results['exception_handling'] = $this->checkExceptionHandling();
         
         return $results;
     }
@@ -1519,6 +1578,637 @@ class OWASPAdvisor
             return [
                 'status' => 'error',
                 'message' => 'Error while checking rate limiting: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Check for Software Supply Chain Failures (A03:2025)
+     */
+    protected function checkSoftwareSupplyChain(): array
+    {
+        $issues = [];
+        
+        try {
+            // Check composer.json for security
+            $composerJson = base_path('composer.json');
+            if (!file_exists($composerJson)) {
+                $issues[] = 'composer.json not found';
+            } else {
+                $composer = json_decode(file_get_contents($composerJson), true);
+                
+                // Check for package audit scripts
+                if (!isset($composer['scripts']['audit'])) {
+                    $issues[] = 'No security audit script found in composer.json';
+                }
+                
+                // Check for outdated packages
+                if (!isset($composer['require'])) {
+                    $issues[] = 'No dependencies defined in composer.json';
+                }
+            }
+
+            // Check for lock file
+            $composerLock = base_path('composer.lock');
+            if (!file_exists($composerLock)) {
+                $issues[] = 'composer.lock not found - run composer install';
+            }
+
+            // Check for security scanning tools
+            $devDependencies = $composer['require-dev'] ?? [];
+            $securityTools = [
+                'enlightn/security-checker',
+                'roave/security-advisories',
+                'symfony/security-checker'
+            ];
+            
+            $hasSecurityTool = false;
+            foreach ($securityTools as $tool) {
+                if (isset($devDependencies[$tool])) {
+                    $hasSecurityTool = true;
+                    break;
+                }
+            }
+            
+            if (!$hasSecurityTool) {
+                $issues[] = 'No security scanning tools in dev dependencies';
+            }
+
+            // Check for private package repositories
+            if (isset($composer['repositories'])) {
+                foreach ($composer['repositories'] as $repo) {
+                    if (isset($repo['url']) && str_contains($repo['url'], 'http://')) {
+                        $issues[] = 'Insecure HTTP repository URL found: ' . $repo['url'];
+                    }
+                }
+            }
+
+            // Check for signed commits verification
+            $gitDir = base_path('.git');
+            if (is_dir($gitDir)) {
+                // Check if GPG signing is configured
+                $config = base_path('.git/config');
+                if (file_exists($config)) {
+                    $configContent = file_get_contents($config);
+                    if (!str_contains($configContent, 'gpgsign')) {
+                        $issues[] = 'Git commit signing not configured';
+                    }
+                }
+            }
+
+            $checks = [
+                'composer_audit' => [
+                    'status' => !isset($composer['scripts']['audit']) ? 'error' : 'success',
+                    'message' => !isset($composer['scripts']['audit']) ? 'No security audit script found in composer.json' : 'Security audit script configured'
+                ],
+                'security_tools' => [
+                    'status' => !$hasSecurityTool ? 'warning' : 'success',
+                    'message' => !$hasSecurityTool ? 'No security scanning tools in dev dependencies' : 'Security scanning tools configured'
+                ],
+                'git_signing' => [
+                    'status' => (!is_dir(base_path('.git')) || !file_exists(base_path('.git/config')) || !str_contains(file_get_contents(base_path('.git/config')), 'gpgsign')) ? 'warning' : 'success',
+                    'message' => (!is_dir(base_path('.git')) || !file_exists(base_path('.git/config')) || !str_contains(file_get_contents(base_path('.git/config')), 'gpgsign')) ? 'Git commit signing not configured' : 'Git commit signing configured'
+                ]
+            ];
+
+            return $this->formatResults($checks);
+
+        } catch (\Exception $e) {
+            return [
+                'status' => 'error',
+                'message' => 'Error while checking software supply chain: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Check for Insecure Design (A06:2025)
+     */
+    protected function checkInsecureDesign(): array
+    {
+        $issues = [];
+        
+        try {
+            // Check for threat modeling documentation
+            $threatModelFiles = [
+                'docs/threat-model.md',
+                'docs/security.md',
+                'THREATS.md',
+                'SECURITY.md'
+            ];
+            
+            $hasThreatModel = false;
+            foreach ($threatModelFiles as $file) {
+                if (file_exists(base_path($file))) {
+                    $hasThreatModel = true;
+                    break;
+                }
+            }
+            
+            if (!$hasThreatModel) {
+                $issues[] = 'No threat modeling documentation found';
+            }
+
+            // Check for secure design patterns in code
+            $appPath = $this->getAppPath();
+            if (File::exists($appPath)) {
+                $files = File::allFiles($appPath);
+                
+                $designPatterns = [
+                    'defense_in_depth' => false,
+                    'fail_secure' => false,
+                    'least_privilege' => false
+                ];
+                
+                foreach ($files as $file) {
+                    $content = file_get_contents($file->getPathname());
+                    
+                    // Check for defense in depth patterns
+                    if (preg_match('/(middleware|guard|policy|permission)/i', $content)) {
+                        $designPatterns['defense_in_depth'] = true;
+                    }
+                    
+                    // Check for fail secure patterns
+                    if (preg_match('/(throw|abort|response)->\s*(401|403|404|500)/', $content)) {
+                        $designPatterns['fail_secure'] = true;
+                    }
+                    
+                    // Check for least privilege patterns
+                    if (preg_match('/(can|cannot|ability|role|permission)/i', $content)) {
+                        $designPatterns['least_privilege'] = true;
+                    }
+                }
+                
+                foreach ($designPatterns as $pattern => $found) {
+                    if (!$found) {
+                        $issues[] = 'Missing secure design pattern: ' . str_replace('_', ' ', $pattern);
+                    }
+                }
+            }
+
+            // Check for business logic validation
+            $routesPath = base_path('routes');
+            if (File::exists($routesPath)) {
+                $files = File::allFiles($routesPath);
+                $hasBusinessLogicValidation = false;
+                
+                foreach ($files as $file) {
+                    $content = file_get_contents($file->getPathname());
+                    if (preg_match('/(validate|rules|request|form)/i', $content)) {
+                        $hasBusinessLogicValidation = true;
+                        break;
+                    }
+                }
+                
+                if (!$hasBusinessLogicValidation) {
+                    $issues[] = 'Limited business logic validation found in routes';
+                }
+            }
+
+            $checks = [
+                'threat_modeling' => [
+                    'status' => $hasThreatModel ? 'success' : 'warning',
+                    'message' => $hasThreatModel ? 'Threat modeling documentation found' : 'No threat modeling documentation found'
+                ],
+                'design_patterns' => [
+                    'status' => ($designPatterns['defense_in_depth'] && $designPatterns['fail_secure'] && $designPatterns['least_privilege']) ? 'success' : 'warning',
+                    'message' => ($designPatterns['defense_in_depth'] && $designPatterns['fail_secure'] && $designPatterns['least_privilege']) ? 'Secure design patterns implemented' : 'Missing secure design patterns'
+                ],
+                'business_logic' => [
+                    'status' => $hasBusinessLogicValidation ? 'success' : 'warning',
+                    'message' => $hasBusinessLogicValidation ? 'Business logic validation found' : 'Limited business logic validation found in routes'
+                ]
+            ];
+
+            return $this->formatResults($checks);
+
+        } catch (\Exception $e) {
+            return [
+                'status' => 'error',
+                'message' => 'Error while checking insecure design: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Check for Software or Data Integrity Failures (A08:2025)
+     */
+    protected function checkSoftwareDataIntegrity(): array
+    {
+        $issues = [];
+        
+        try {
+            // Check for CI/CD integrity checks
+            $ciFiles = [
+                '.github/workflows',
+                '.gitlab-ci.yml',
+                'Jenkinsfile',
+                'azure-pipelines.yml'
+            ];
+            
+            $hasCI = false;
+            foreach ($ciFiles as $file) {
+                if (file_exists(base_path($file))) {
+                    $hasCI = true;
+                    break;
+                }
+            }
+            
+            if ($hasCI) {
+                // Check for integrity checks in CI
+                $integrityChecks = ['code-signing', 'checksum', 'hash', 'verify'];
+                $foundIntegrityCheck = false;
+                
+                foreach ($ciFiles as $file) {
+                    if ($foundIntegrityCheck) break;
+                    
+                    if (is_dir(base_path($file))) {
+                        $files = File::allFiles(base_path($file));
+                        foreach ($files as $ciFile) {
+                            if ($foundIntegrityCheck) break;
+                            
+                            $content = file_get_contents($ciFile->getPathname());
+                            foreach ($integrityChecks as $check) {
+                                if (str_contains($content, $check)) {
+                                    $foundIntegrityCheck = true;
+                                    break;
+                                }
+                            }
+                        }
+                    } elseif (file_exists(base_path($file))) {
+                        $content = file_get_contents(base_path($file));
+                        foreach ($integrityChecks as $check) {
+                            if (str_contains($content, $check)) {
+                                $foundIntegrityCheck = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (!$foundIntegrityCheck) {
+                    $issues[] = 'No integrity verification found in CI/CD pipeline';
+                }
+            } else {
+                $issues[] = 'No CI/CD pipeline configuration found';
+            }
+
+            // Check for unsigned updates
+            $appPath = $this->getAppPath();
+            if (File::exists($appPath)) {
+                $files = File::allFiles($appPath);
+                $unsafeUpdatePatterns = [
+                    'file_get_contents.*http',
+                    'curl_exec',
+                    'exec.*wget',
+                    'exec.*curl',
+                    'shell_exec.*update'
+                ];
+                
+                foreach ($files as $file) {
+                    $content = file_get_contents($file->getPathname());
+                    foreach ($unsafeUpdatePatterns as $pattern) {
+                        if (preg_match('/' . $pattern . '/', $content)) {
+                            $issues[] = 'Potentially unsafe update mechanism found in ' . $file->getRelativePathname();
+                            break 2;
+                        }
+                    }
+                }
+            }
+
+            // Check for database integrity
+            try {
+                $tables = $this->db->select('SHOW TABLES');
+                $hasChecksums = false;
+                
+                foreach ($tables as $table) {
+                    $tableName = current((array)$table);
+                    $columns = $this->db->select('SHOW COLUMNS FROM ' . $tableName);
+                    
+                    foreach ($columns as $column) {
+                        if (str_contains($column->Field, 'hash') || 
+                            str_contains($column->Field, 'checksum') || 
+                            str_contains($column->Field, 'signature') || 
+                            str_contains($column->Field, 'md5') || 
+                            str_contains($column->Field, 'sha')) {
+                            $hasChecksums = true;
+                            break 2;
+                        }
+                    }
+                    
+                    if ($hasChecksums) {
+                        break;
+                    }
+                }
+                
+                if (!$hasChecksums) {
+                    $issues[] = 'No data integrity checks (hashes/checksums) found in database';
+                }
+            } catch (\Exception $e) {
+                $issues[] = 'Could not verify database integrity: ' . $e->getMessage();
+            }
+
+            $checks = [
+                'ci_integrity' => [
+                    'status' => ($hasCI && $foundIntegrityCheck) ? 'success' : 'warning',
+                    'message' => ($hasCI && $foundIntegrityCheck) ? 'CI/CD integrity checks found' : 'No integrity verification found in CI/CD pipeline'
+                ],
+                'database_integrity' => [
+                    'status' => $hasChecksums ? 'success' : 'warning',
+                    'message' => $hasChecksums ? 'Data integrity checks found in database' : 'No data integrity checks (hashes/checksums) found in database'
+                ],
+                'update_mechanisms' => [
+                    'status' => empty($issues) ? 'success' : 'warning',
+                    'message' => empty($issues) ? 'Update mechanisms are secure' : 'Potentially unsafe update mechanisms found'
+                ]
+            ];
+
+            return $this->formatResults($checks);
+
+        } catch (\Exception $e) {
+            return [
+                'status' => 'error',
+                'message' => 'Error while checking software/data integrity: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Check for Security Logging and Alerting Failures (A09:2025)
+     */
+    protected function checkSecurityLogging(): array
+    {
+        $issues = [];
+        
+        try {
+            // Check logging configuration
+            $loggingConfig = $this->config->get('logging', []);
+            if (empty($loggingConfig)) {
+                $issues[] = 'Logging configuration not found';
+            } else {
+                $defaultChannel = $this->config->get('logging.default', 'single');
+                $channels = $this->config->get('logging.channels', []);
+                
+                if (empty($channels[$defaultChannel])) {
+                    $issues[] = 'Default logging channel not properly configured';
+                }
+                
+                // Check for security-specific logging
+                $hasSecurityChannel = false;
+                foreach ($channels as $name => $config) {
+                    if (str_contains($name, 'security') || str_contains($name, 'auth')) {
+                        $hasSecurityChannel = true;
+                        break;
+                    }
+                }
+                
+                if (!$hasSecurityChannel) {
+                    $issues[] = 'No dedicated security logging channel found';
+                }
+            }
+
+            // Check for security event logging in code
+            $appPath = $this->getAppPath();
+            if (File::exists($appPath)) {
+                $files = File::allFiles($appPath);
+                $securityEvents = [
+                    'login', 'logout', 'failed_login', 'permission_denied',
+                    'admin_access', 'data_export', 'password_change'
+                ];
+                
+                $foundSecurityLogs = false;
+                foreach ($files as $file) {
+                    $content = file_get_contents($file->getPathname());
+                    foreach ($securityEvents as $event) {
+                        if (preg_match('/(Log::|logger|info|debug).*' . $event . '/i', $content)) {
+                            $foundSecurityLogs = true;
+                            break 2;
+                        }
+                    }
+                }
+                
+                if (!$foundSecurityLogs) {
+                    $issues[] = 'Security event logging not found in application code';
+                }
+            }
+
+            // Check for alerting mechanisms
+            $hasAlerting = false;
+            $notificationChannels = $this->config->get('owaspadvisor.reporting.notification_channels', []);
+            
+            if (!empty($notificationChannels)) {
+                $hasAlerting = true;
+            }
+            
+            // Check for monitoring services
+            $composerJson = base_path('composer.json');
+            if (file_exists($composerJson)) {
+                $composer = json_decode(file_get_contents($composerJson), true);
+                $dependencies = array_merge($composer['require'] ?? [], $composer['require-dev'] ?? []);
+                
+                $monitoringPackages = [
+                    'sentry/sentry-laravel',
+                    'bugsnag/bugsnag-laravel',
+                    'rollbar/rollbar-laravel',
+                    'fluent/fluentd',
+                    'elasticsearch/elasticsearch'
+                ];
+                
+                foreach ($monitoringPackages as $package) {
+                    if (isset($dependencies[$package])) {
+                        $hasAlerting = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!$hasAlerting) {
+                $issues[] = 'No alerting/monitoring service configured';
+            }
+
+            // Check log retention policy
+            $logRetention = $this->config->get('logging.channels.daily.days', 0);
+            if ($logRetention < 30) {
+                $issues[] = 'Log retention period should be at least 30 days for security analysis';
+            }
+
+            $checks = [
+                'security_events' => [
+                    'status' => $foundSecurityLogs ? 'success' : 'warning',
+                    'message' => $foundSecurityLogs ? 'Security event logging found' : 'Security event logging not found in application code'
+                ],
+                'alerting' => [
+                    'status' => $hasAlerting ? 'success' : 'warning',
+                    'message' => $hasAlerting ? 'Alerting/monitoring service configured' : 'No alerting/monitoring service configured'
+                ],
+                'log_retention' => [
+                    'status' => $logRetention >= 30 ? 'success' : 'warning',
+                    'message' => $logRetention >= 30 ? 'Log retention policy is adequate' : 'Log retention period should be at least 30 days for security analysis'
+                ]
+            ];
+
+            return $this->formatResults($checks);
+
+        } catch (\Exception $e) {
+            return [
+                'status' => 'error',
+                'message' => 'Error while checking security logging: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Check for Mishandling of Exceptional Conditions (A10:2025)
+     */
+    protected function checkExceptionHandling(): array
+    {
+        try {
+            // Check for proper exception handling
+            $appPath = $this->getAppPath();
+            $hasUnsafePatterns = false;
+            
+            if (File::exists($appPath)) {
+                $files = File::allFiles($appPath);
+                
+                $unsafePatterns = [
+                    '/catch\s*\(\s*\$e\s*\)\s*\{\s*\}/',  // Empty catch blocks
+                    '/catch\s*\(\s*Exception\s*\$e\s*\)\s*\{\s*\/\/\s*ignore/',  // Ignored exceptions
+                    '/try\s*\{[^}]*\}\s*catch\s*\([^)]*\)\s*\{\s*\}/',  // Try-catch with empty catch
+                    '/@\s*suppressWarnings/',  // Suppressed warnings
+                    '/error_reporting\(0\)/',  // Disabled error reporting
+                ];
+                
+                foreach ($files as $file) {
+                    if ($hasUnsafePatterns) break;
+                    
+                    if (!$this->str->endsWith($file->getRelativePathname(), '.php')) {
+                        continue;
+                    }
+                    
+                    $content = file_get_contents($file->getPathname());
+                    foreach ($unsafePatterns as $pattern) {
+                        if (preg_match($pattern, $content)) {
+                            $hasUnsafePatterns = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Check for fail-open scenarios
+            $routesPath = base_path('routes');
+            $hasFailOpen = false;
+            
+            if (File::exists($routesPath)) {
+                $files = File::allFiles($routesPath);
+                
+                foreach ($files as $file) {
+                    $content = file_get_contents($file->getPathname());
+                    
+                    // Check for authentication bypasses in error conditions
+                    if (preg_match('/catch.*\{.*return.*true.*\}/', $content)) {
+                        $hasFailOpen = true;
+                        break;
+                    }
+                }
+            }
+
+            // Check for resource cleanup in exceptions
+            $cleanupPatterns = [
+                '/finally\s*\{/',
+                '/try\s*\{.*\}\s*catch.*\}\s*finally/',
+                '/__destruct\(/',
+                '/register_shutdown_function/'
+            ];
+            
+            $hasCleanup = false;
+            if (File::exists($appPath)) {
+                $files = File::allFiles($appPath);
+                foreach ($files as $file) {
+                    $content = file_get_contents($file->getPathname());
+                    foreach ($cleanupPatterns as $pattern) {
+                        if (preg_match($pattern, $content)) {
+                            $hasCleanup = true;
+                            break 2;
+                        }
+                    }
+                }
+            }
+
+            // Check for timeout and resource limit handling
+            $timeoutPatterns = [
+                '/set_time_limit/',
+                '/max_execution_time/',
+                '/memory_limit/',
+                '/timeout/'
+            ];
+            
+            $hasTimeoutHandling = false;
+            if (File::exists($appPath)) {
+                $files = File::allFiles($appPath);
+                foreach ($files as $file) {
+                    $content = file_get_contents($file->getPathname());
+                    foreach ($timeoutPatterns as $pattern) {
+                        if (preg_match($pattern, $content)) {
+                            $hasTimeoutHandling = true;
+                            break 2;
+                        }
+                    }
+                }
+            }
+
+            // Check for circuit breaker patterns
+            $circuitBreakerPatterns = [
+                '/circuit.*breaker/i',
+                '/timeout.*retry/i',
+                '/fallback/i',
+                '/retry.*policy/i'
+            ];
+            
+            $hasCircuitBreaker = false;
+            if (File::exists($appPath)) {
+                $files = File::allFiles($appPath);
+                foreach ($files as $file) {
+                    $content = file_get_contents($file->getPathname());
+                    foreach ($circuitBreakerPatterns as $pattern) {
+                        if (preg_match($pattern, $content)) {
+                            $hasCircuitBreaker = true;
+                            break 2;
+                        }
+                    }
+                }
+            }
+
+            $checks = [
+                'empty_catch_blocks' => [
+                    'status' => !$hasUnsafePatterns ? 'success' : 'warning',
+                    'message' => !$hasUnsafePatterns ? 'Exception handling patterns are secure' : 'Unsafe exception handling patterns found'
+                ],
+                'fail_open' => [
+                    'status' => !$hasFailOpen ? 'success' : 'warning', 
+                    'message' => !$hasFailOpen ? 'No fail-open scenarios found' : 'Potential fail-open authentication found'
+                ],
+                'resource_cleanup' => [
+                    'status' => $hasCleanup ? 'success' : 'warning',
+                    'message' => $hasCleanup ? 'Resource cleanup patterns found' : 'No resource cleanup patterns found in exception handling'
+                ],
+                'timeout_handling' => [
+                    'status' => ($hasTimeoutHandling || $hasCircuitBreaker) ? 'success' : 'warning',
+                    'message' => ($hasTimeoutHandling || $hasCircuitBreaker) ? 'Timeout handling found' : 'No timeout or resource limit handling found'
+                ]
+            ];
+
+            return $this->formatResults($checks);
+
+        } catch (\Exception $e) {
+            return [
+                'status' => 'error',
+                'checks' => [
+                    'error' => [
+                        'status' => 'error',
+                        'message' => 'Error while checking exception handling: ' . $e->getMessage()
+                    ]
+                ]
             ];
         }
     }
